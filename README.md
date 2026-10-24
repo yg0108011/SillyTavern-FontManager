@@ -21,13 +21,13 @@ SillyTavern（酒馆）第三方字体管理扩展：一键更换全站字体，
 ### 1. 获取文件
 
 - 直接 `git clone` 本仓库，或在仓库页面点 **Code → Download ZIP** 解压；
-- 将插件文件夹重命名为 `FontManager`（`manifest.json`、`index.js`、`style.css`、`settings.html`、`README.md` 需位于同一文件夹内）。
+- 扩展会**自动识别自身所在目录名**，无需手动改文件夹名；`manifest.json`、`index.js`、`style.css`、`settings.html`、`README.md` 需位于同一文件夹内。
 
 ### 2. 放入酒馆目录
 
-**当前用户（推荐，无需重启服务）**：`data/<你的用户名>/extensions/FontManager/`
+**当前用户（推荐，无需重启服务）**：`data/<你的用户名>/extensions/<插件文件夹>/`
 
-**全用户（服务端目录）**：`public/scripts/extensions/third-party/FontManager/`
+**全用户（服务端目录）**：`public/scripts/extensions/third-party/<插件文件夹>/`
 
 ### 3. 启用扩展
 
@@ -87,7 +87,7 @@ body {
 ## 文件结构
 
 ```
-FontManager/
+<插件文件夹>/
 ├── manifest.json      # 扩展元数据与生命周期钩子
 ├── index.js           # 核心逻辑：设置存储、样式注入、事件绑定、预览
 ├── settings.html      # 设置面板模板
@@ -121,6 +121,11 @@ FontManager/
 
 - 兼容基于 Chromium 的酒馆桌面端与浏览器端；建议酒馆版本 ≥ 1.12.0。
 - 本扩展为纯前端实现，不依赖 Extras 模块与后端服务。
+
+## 更新记录
+
+- **v1.0.1**：修复从 GitHub 直接安装（目录名为仓库名）时设置面板报 `Error rendering template` 的问题；扩展目录名改为运行时自适应识别，模板加载失败时自动回退直接拉取。
+- **v1.0.0**：首个版本，全局字体覆盖、远程 CSS / `@import`、本地上传字体、按语言分组分配与实时预览。
 
 ## 许可证
 
