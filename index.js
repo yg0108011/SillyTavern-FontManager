@@ -196,7 +196,7 @@ function normalizeRemoteCss(raw) {
 
 /**
  * 从远程 CSS 顶层 body 规则中提取 font-family。
- * 用户在远程样式中写 `body { font-family: "X" }` 的本意是「全站用 X」，
+ * 用户在远程样式中写 `body { font-family: "X" }` 的本意是「全站用 X」,
  * 但本插件会对所有界面元素注入 !important 的字体栈覆盖，导致该规则永远被压过。
  * 因此这里把远程 body 字体提取出来，作为全局字体栈的最前项，使远程字体真正生效。
  */
@@ -300,6 +300,14 @@ const CODE_SELECTORS = [
     'body.fm-active .monospace',
 ];
 
+/**
+ * 全站兜底选择器：除「图标字体元素」与「代码区」外，所有文字都强制使用全局字体栈。
+ * 用于解决第三方主题自带字体（顶栏、按钮、标签、下拉等）盖过远程 body 字体的问题；
+ * 图标元素（FontAwesome / 内联 SVG / Material Icons）单独排除，避免图标变方块。
+ * 代码区也排除，让其由 CODE_SELECTORS（applyCode）独立控制，或保持主题默认。
+ */
+const GLOBAL_WILDCARD = 'body.fm-active :not(svg):not([class*="fa-"]):not(.fa):not([class*="svg-inline--fa"]):not([class*="material-icons"]):not(code):not(pre):not(kbd):not(samp):not(.monospace):not(.code)';
+
 function applyCss() {
     const s = getSettings();
     let bodyStack = buildStack(s.latinFont, s.cjkFont, s.otherFont);
@@ -320,6 +328,10 @@ function applyCss() {
         '}',
         '',
         BODY_SELECTORS.join(',\n') + ' {',
+        '  font-family: var(--fm-body-stack) !important;' + weightRule,
+        '}',
+        '',
+        GLOBAL_WILDCARD + ' {',
         '  font-family: var(--fm-body-stack) !important;' + weightRule,
         '}',
         '',
