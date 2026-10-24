@@ -124,9 +124,9 @@ function cssWeight(w) {
 
 const WEIGHT_NAMED = ['normal', 'bold', 'lighter', 'bolder'];
 
-/** 把存储的 weight 值映射为面板模式：theme / 命名值 / custom（数值） */
+/** 把存储的 weight 值映射为面板模式：命名值 / custom（数值）。旧版遗留的 theme 按 normal 处理（不再跟随主题） */
 function weightToMode(w) {
-    if (w === 'theme') return 'theme';
+    if (w === 'theme') return 'normal';
     if (WEIGHT_NAMED.includes(w)) return w;
     return 'custom';
 }
@@ -320,9 +320,7 @@ function applyCss() {
         bodyStack = rq + (bodyStack ? ', ' + bodyStack : '');
     }
     const codeStack = s.codeFont.trim() || 'monospace';
-    const weightRule = s.weight === 'theme'
-        ? ''
-        : `\n  font-weight: ${cssWeight(s.weight)} !important;`;
+    const weightRule = `\n  font-weight: ${cssWeight(s.weight)} !important;`;
 
     let css = [
         'body.fm-active {',
