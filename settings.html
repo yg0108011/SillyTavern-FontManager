@@ -1,0 +1,127 @@
+<div class="fm-manager">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>字体管理器 Font Manager</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+
+            <!-- 总开关 -->
+            <div class="fm-row fm-row-head">
+                <label for="fm-enabled" class="fm-label">启用全局字体覆盖</label>
+                <input type="checkbox" id="fm-enabled" class="checkbox" checked>
+            </div>
+            <div class="fm-hint">
+                关闭后将恢复酒馆原有字体；浏览器按字形逐字符回退：英文与数字使用第一项字体，其余文字自动使用后续字体。
+            </div>
+
+            <!-- 语言字体分配 -->
+            <div class="fm-section-title">语言字体分配</div>
+
+            <div class="fm-row">
+                <label for="fm-latin-font" class="fm-label">拉丁字母与数字</label>
+                <input type="text" id="fm-latin-font" class="fm-text" list="fm-datalist-latin" placeholder="Times New Roman" autocomplete="off">
+                <datalist id="fm-datalist-latin"></datalist>
+            </div>
+            <div class="fm-hint">默认 Times New Roman；可在下拉候选中选择，或直接输入系统 / 已安装 / 已上传字体名。</div>
+
+            <div class="fm-row">
+                <label for="fm-cjk-font" class="fm-label">中文 / 日文 / 韩文</label>
+                <input type="text" id="fm-cjk-font" class="fm-text" list="fm-datalist-cjk" placeholder="选择或输入本地上传字体" autocomplete="off">
+                <datalist id="fm-datalist-cjk"></datalist>
+            </div>
+            <div class="fm-hint">其余非拉丁文字（中、日、韩等）使用此字体；留空则跟随系统默认中文字体。</div>
+
+            <div class="fm-row">
+                <label for="fm-other-follow" class="fm-label">其他文字跟随中文</label>
+                <input type="checkbox" id="fm-other-follow" class="checkbox" checked>
+            </div>
+            <div class="fm-row fm-row-sub">
+                <label for="fm-other-font" class="fm-label">其他文字单独指定</label>
+                <input type="text" id="fm-other-font" class="fm-text" list="fm-datalist-cjk" placeholder="关闭「跟随中文」后可单独选择" autocomplete="off" disabled>
+            </div>
+
+            <div class="fm-row">
+                <label for="fm-apply-code" class="fm-label">覆盖代码字体</label>
+                <input type="checkbox" id="fm-apply-code" class="checkbox" checked>
+            </div>
+            <div class="fm-row">
+                <label for="fm-code-font" class="fm-label">代码 / 等宽字体</label>
+                <input type="text" id="fm-code-font" class="fm-text" list="fm-datalist-code" placeholder='Consolas, "Courier New", monospace' autocomplete="off">
+                <datalist id="fm-datalist-code"></datalist>
+            </div>
+
+            <div class="fm-row">
+                <label for="fm-weight" class="fm-label">正文粗细</label>
+                <select id="fm-weight" class="fm-select">
+                    <option value="normal" selected>normal（常规）</option>
+                    <option value="bold">bold（加粗）</option>
+                    <option value="lighter">lighter（细体）</option>
+                    <option value="bolder">bolder（更粗）</option>
+                    <option value="300">300</option>
+                    <option value="500">500</option>
+                    <option value="600">600</option>
+                    <option value="800">800</option>
+                    <option value="theme">保留酒馆主题默认</option>
+                </select>
+            </div>
+
+            <!-- 远程字体样式 -->
+            <div class="fm-section-title">远程字体样式（CSS / @import）</div>
+            <div class="fm-hint">
+                粘贴包含 @import 的远程字体 CSS；所有 @import 规则会自动置顶后注入页面，可直接使用示例格式。
+            </div>
+            <textarea id="fm-remote-css" class="fm-textarea" rows="7" placeholder='@import url("https://fontsapi.zeoseven.com/285/main/result.css");&#10;body {&#10;    font-family: "Noto Serif CJK";&#10;    font-weight: normal;&#10;}'></textarea>
+            <div class="fm-btn-row">
+                <button type="button" id="fm-apply-remote" class="menu_button"><i class="fa-solid fa-check"></i> 应用远程样式</button>
+                <button type="button" id="fm-load-example" class="menu_button"><i class="fa-solid fa-flask"></i> 填入示例</button>
+            </div>
+
+            <!-- 本地字体库 -->
+            <div class="fm-section-title">本地字体库</div>
+            <div class="fm-hint">支持 .ttf / .otf / .woff / .woff2；字体文件以浏览器本地缓存保存，不上传服务器。</div>
+
+            <div id="fm-pending-box" class="fm-hidden">
+                <div class="fm-sub-title">待导入</div>
+                <div id="fm-pending-list"></div>
+                <div class="fm-btn-row">
+                    <button type="button" id="fm-import-pending" class="menu_button"><i class="fa-solid fa-file-import"></i> 确认导入（0）</button>
+                </div>
+            </div>
+
+            <div class="fm-btn-row">
+                <button type="button" id="fm-upload-btn" class="menu_button"><i class="fa-solid fa-upload"></i> 上传字体</button>
+                <input type="file" id="fm-font-file" accept=".ttf,.otf,.woff,.woff2" multiple hidden>
+            </div>
+
+            <div id="fm-local-font-list" class="fm-local-list"></div>
+
+            <div class="fm-btn-row fm-btn-row-right">
+                <button type="button" id="fm-clear-fonts" class="menu_button fm-danger"><i class="fa-solid fa-trash-can"></i> 清空本地字体</button>
+                <button type="button" id="fm-reset-defaults" class="menu_button"><i class="fa-solid fa-rotate-left"></i> 恢复默认显示项</button>
+            </div>
+
+            <!-- 实时预览 -->
+            <div class="fm-section-title">实时预览</div>
+            <div class="fm-preview-grid">
+                <div class="fm-preview-item">
+                    <div class="fm-preview-label"><span id="fm-preview-latin-label"></span></div>
+                    <div class="fm-preview-sample" id="fm-preview-latin">The quick brown fox jumps over 1234567890</div>
+                </div>
+                <div class="fm-preview-item">
+                    <div class="fm-preview-label"><span id="fm-preview-cjk-label"></span></div>
+                    <div class="fm-preview-sample" id="fm-preview-cjk">酒馆字体预览：春夏秋冬，山水风月，こんにちは，안녕하세요.</div>
+                </div>
+                <div class="fm-preview-item">
+                    <div class="fm-preview-label"><span id="fm-preview-other-label"></span></div>
+                    <div class="fm-preview-sample" id="fm-preview-other">А Б В Г Д а б в г д · 12345 · العربية</div>
+                </div>
+                <div class="fm-preview-item" id="fm-preview-code-block">
+                    <div class="fm-preview-label"><span id="fm-preview-code-label"></span></div>
+                    <div class="fm-preview-sample fm-preview-code" id="fm-preview-code">const hello = "font-manager"; // 0123456789</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
