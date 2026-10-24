@@ -248,49 +248,6 @@ function parseRemoteFamilies(text) {
     return [...out];
 }
 
-const BODY_SELECTORS = [
-    'body.fm-active',
-    'body.fm-active #chat',
-    'body.fm-active #chat .mes_text',
-    'body.fm-active #chat .mes_text p',
-    'body.fm-active #chat .mes_text span',
-    'body.fm-active #chat .mes_text .name_text',
-    'body.fm-active #chat .mes_text .last_mes',
-    'body.fm-active #send_textarea',
-    'body.fm-active .select2-container .select2-selection__rendered',
-    'body.fm-active .select2-search__field',
-    'body.fm-active .form-control',
-    'body.fm-active input[type="text"]',
-    'body.fm-active textarea',
-    'body.fm-active button',
-    'body.fm-active .inline-drawer-header',
-    'body.fm-active .popup-body',
-    'body.fm-active .title_ver',
-    'body.fm-active .title_logprobs',
-    'body.fm-active .drawer-content',
-    'body.fm-active .world_entry',
-    'body.fm-active .avatar_caption',
-    'body.fm-active .extensions_settings',
-    'body.fm-active .right_menu_button',
-    'body.fm-active .chats_drawer',
-    'body.fm-active .user_text',
-    'body.fm-active .sys_text',
-    'body.fm-active .completion_checkbox',
-    'body.fm-active .label_logprobs',
-    'body.fm-active .user_name',
-    'body.fm-active .sys_name',
-    'body.fm-active #character_name',
-    'body.fm-active #slideshow',
-    'body.fm-active .scrollable',
-    'body.fm-active h1',
-    'body.fm-active h2',
-    'body.fm-active h3',
-    'body.fm-active h4',
-    'body.fm-active h5',
-    'body.fm-active label',
-    'body.fm-active .option_drawer',
-];
-
 const CODE_SELECTORS = [
     'body.fm-active code',
     'body.fm-active pre',
@@ -301,12 +258,25 @@ const CODE_SELECTORS = [
 ];
 
 /**
- * 全站兜底选择器：除「图标字体元素」与「代码区」外，所有文字都强制使用全局字体栈。
+ * 图标元素选择器：匹配常见图标字体形态（FontAwesome 全系列含 fas/far/fab 缩写、
+ * 内联 SVG、Material Icons、iconfont / glyphicon 等），由 markIcons() 打上 fm-no-font 标记。
+ */
+const ICON_SELECTOR = '[class*="fa-"], [class*="fas "], [class*="far "], [class*="fab "], svg, [class*="material-icons"], [class*="svg-inline--fa"], [class*="icon-"], [class*="iconfont"], [class*="glyphicon"]';
+
+/**
+ * 给所有图标元素打上 fm-no-font 标记，让全站兜底规则跳过它们，图标字体保持原样。
+ * 相比纯 CSS 类名排除，JS 标记能覆盖 fas/far/fab 缩写、iconfont、glyphicon 等更多形态。
+ */
+function markIcons() {
+    document.body.querySelectorAll(ICON_SELECTOR).forEach((el) => el.classList.add('fm-no-font'));
+}
+
+/**
+ * 全站兜底选择器：除「图标元素（fm-no-font）」与「代码区」外，所有文字都强制使用全局字体栈。
  * 用于解决第三方主题自带字体（顶栏、按钮、标签、下拉等）盖过远程 body 字体的问题；
- * 图标元素（FontAwesome / 内联 SVG / Material Icons）单独排除，避免图标变方块。
  * 代码区也排除，让其由 CODE_SELECTORS（applyCode）独立控制，或保持主题默认。
  */
-const GLOBAL_WILDCARD = 'body.fm-active :not(svg):not([class*="fa-"]):not(.fa):not([class*="svg-inline--fa"]):not([class*="material-icons"]):not(code):not(pre):not(kbd):not(samp):not(.monospace):not(.code)';
+const GLOBAL_WILDCARD = 'body.fm-active :not(svg):not(.fm-no-font):not(code):not(pre):not(kbd):not(samp):not(.monospace):not(.code)';
 
 function applyCss() {
     const s = getSettings();
@@ -325,10 +295,7 @@ function applyCss() {
         'body.fm-active {',
         `  --fm-body-stack: ${bodyStack};`,
         `  --fm-code-stack: ${codeStack};`,
-        '}',
-        '',
-        BODY_SELECTORS.join(',\n') + ' {',
-        '  font-family: var(--fm-body-stack) !important;' + weightRule,
+        '  font-family: var(--fm-body-stack);',
         '}',
         '',
         GLOBAL_WILDCARD + ' {',
@@ -375,6 +342,7 @@ function applyFonts() {
         return;
     }
     document.body.classList.add('fm-active');
+    markIcons();
     injectStyle(STYLE_ID.face, fontFaceCss());
     injectStyle(STYLE_ID.remote, normalizeRemoteCss(s.remoteCss));
     injectStyle(STYLE_ID.apply, applyCss());
