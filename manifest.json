@@ -7,7 +7,7 @@
     "js": "index.js",
     "css": "style.css",
     "author": "yg0108011",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "homePage": "https://github.com/yg0108011/SillyTavern-FontManager",
     "license": "MIT",
     "auto_update": true,
