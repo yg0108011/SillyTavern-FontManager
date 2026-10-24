@@ -5,8 +5,27 @@
 
 // ============================ 常量 ============================
 const MODULE_NAME = 'font_manager';
-const EXT_FOLDER = 'third-party/FontManager';
 const FORAGE_KEY = 'fm_font_data';
+
+/**
+ * 自适应解析当前扩展的真实目录名（兼容 third-party/ 前缀与自定义文件夹名）。
+ * 安装目录名可能是 FontManager、仓库名 SillyTavern-FontManager 等，不能写死。
+ */
+function detectExtensionName() {
+    let src = '';
+    try { src = import.meta.url || ''; } catch { src = ''; }
+    if (!src) src = document.currentScript?.src || '';
+    if (!src) {
+        const hit = Array.from(document.querySelectorAll('script[type="module"][src]')).find((s) =>
+            /\/scripts\/extensions\/.+\/index\.js(?:\?|#|$)/.test(s.src)
+        );
+        src = hit?.src || '';
+    }
+    const m = src.match(/\/scripts\/extensions\/(.+?)\/index\.js(?:\?|#|$)/);
+    return m ? m[1] : 'third-party/FontManager';
+}
+const EXT_NAME = detectExtensionName();
+
 const STYLE_ID = {
     remote: 'fm-remote-style',
     face: 'fm-font-face-style',
@@ -683,16 +702,23 @@ jQuery(async () => {
     cachedFontData = await loadFontData();
     const s = getSettings();
 
-    let settingsHtml;
+    let settingsHtml = '';
+    // 优先走酒馆模板渲染；若 404 / 编译失败 / 返回空，回退直接拉取，再失败给兜底面板
     try {
         if (typeof ctx.renderExtensionTemplateAsync === 'function') {
-            settingsHtml = await ctx.renderExtensionTemplateAsync(EXT_FOLDER, 'settings', {});
-        } else {
-            settingsHtml = await $.get(`scripts/extensions/${EXT_FOLDER}/settings.html`);
+            settingsHtml = await ctx.renderExtensionTemplateAsync(EXT_NAME, 'settings', {});
         }
     } catch (err) {
-        console.error('[FontManager] 设置面板加载失败：', err);
-        return;
+        console.error('[FontManager] 模板渲染失败，改用直接拉取：', err);
+        settingsHtml = '';
+    }
+    if (!settingsHtml) {
+        try {
+            settingsHtml = await $.get(`scripts/extensions/${EXT_NAME}/settings.html`);
+        } catch (err) {
+            console.error('[FontManager] 设置面板拉取失败：', err);
+            settingsHtml = '<div class="fm-manager"><div class="inline-drawer"><div class="inline-drawer-content"><b>字体管理器</b><p>设置面板加载失败：未找到 settings.html，请确认它位于当前扩展目录内。</p></div></div></div>';
+        }
     }
 
     const container = document.querySelector('#extensions_settings2') || document.querySelector('#extensions_settings');
