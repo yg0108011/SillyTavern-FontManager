@@ -122,6 +122,22 @@ function cssWeight(w) {
     return 'normal';
 }
 
+const WEIGHT_NAMED = ['normal', 'bold', 'lighter', 'bolder'];
+
+/** 把存储的 weight 值映射为面板模式：theme / 命名值 / custom（数值） */
+function weightToMode(w) {
+    if (w === 'theme') return 'theme';
+    if (WEIGHT_NAMED.includes(w)) return w;
+    return 'custom';
+}
+
+/** 把 weight 值解析为滑杆数值（100–900），非法时回退 400 */
+function weightToNumber(w) {
+    const n = parseInt(String(w), 10);
+    if (!Number.isNaN(n)) return Math.min(900, Math.max(100, n));
+    return 400;
+}
+
 function escapeHtml(text) {
     return String(text ?? '').replace(/[&<>"']/g, (c) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -596,8 +612,22 @@ function syncControls() {
     $('#fm-other-font').prop('disabled', follow);
     $('#fm-code-font').val(s.codeFont);
     $('#fm-apply-code').prop('checked', s.applyCode);
-    $('#fm-weight').val(s.weight);
+    syncWeightControls();
     $('#fm-remote-css').val(s.remoteCss);
+}
+
+/** 同步正文粗细控件（模式下拉 + 数值滑杆）到当前设置 */
+function syncWeightControls() {
+    const s = getSettings();
+    const mode = weightToMode(s.weight);
+    $('#fm-weight-mode').val(mode);
+    const customRow = $('#fm-weight-custom');
+    if (customRow.length) customRow.toggleClass('fm-hidden', mode !== 'custom');
+    if (mode === 'custom') {
+        const n = weightToNumber(s.weight);
+        $('#fm-weight-range').val(n);
+        $('#fm-weight-value').text(n);
+    }
 }
 
 function bindEvents() {
@@ -627,8 +657,25 @@ function bindEvents() {
         applyFonts();
     });
 
-    $('#fm-weight').on('change', function () {
-        getSettings().weight = this.value;
+    // 正文粗细：模式 + 数值滑杆
+    $('#fm-weight-mode').on('change', function () {
+        const mode = this.value;
+        $('#fm-weight-custom').toggleClass('fm-hidden', mode !== 'custom');
+        const s = getSettings();
+        if (mode === 'custom') {
+            const v = $('#fm-weight-range').val();
+            s.weight = String(v);
+            $('#fm-weight-value').text(v);
+        } else {
+            s.weight = mode;
+        }
+        ctx.saveSettingsDebounced();
+        applyFonts();
+    });
+    $('#fm-weight-range').on('input', function () {
+        const v = this.value;
+        $('#fm-weight-value').text(v);
+        getSettings().weight = String(v);
         ctx.saveSettingsDebounced();
         applyFonts();
     });
