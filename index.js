@@ -187,6 +187,43 @@ function normalizeRemoteCss(raw) {
     return imports.join('\n') + (rest ? '\n' + rest : '');
 }
 
+/**
+ * 从远程 CSS 顶层 body 规则中提取 font-family。
+ * 用户在远程样式中写 `body { font-family: "X" }` 的本意是「全站用 X」，
+ * 但本插件会对所有界面元素注入 !important 的字体栈覆盖，导致该规则永远被压过。
+ * 因此这里把远程 body 字体提取出来，作为全局字体栈的最前项，使远程字体真正生效。
+ */
+function extractBodyFontFamily(text) {
+    if (!text || !text.trim()) return '';
+    const s = String(text);
+    let out = '';
+    let depth = 0;
+    let blockStart = -1;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === '{') {
+            if (depth === 0) blockStart = i;
+            depth++;
+        } else if (ch === '}') {
+            depth--;
+            if (depth === 0 && blockStart >= 0) {
+                // 取紧邻本块的顶层选择器（前一个规则边界之后）
+                const selector = s.slice(0, blockStart).split(/[;}\n]/).pop().trim();
+                const block = s.slice(blockStart + 1, i);
+                if (/\bbody\s*$/i.test(selector)) {
+                    const fm = block.match(/font-family\s*:\s*([^;{}]+)/i);
+                    if (fm) {
+                        const name = fm[1].trim().replace(/^['"]|['"]$/g, '').trim();
+                        if (name) { out = name; break; }
+                    }
+                }
+                blockStart = -1;
+            }
+        }
+    }
+    return out;
+}
+
 /** 从远程 CSS 文本中解析出 font-family 候选名 */
 function parseRemoteFamilies(text) {
     const out = new Set();
@@ -258,7 +295,14 @@ const CODE_SELECTORS = [
 
 function applyCss() {
     const s = getSettings();
-    const bodyStack = buildStack(s.latinFont, s.cjkFont, s.otherFont);
+    let bodyStack = buildStack(s.latinFont, s.cjkFont, s.otherFont);
+    // 远程 CSS 若声明了顶层 body 字体，则把它放在字体栈最前，作为全站主字体；
+    // 这样本插件的 !important 覆盖规则反而会强制全站使用远程字体，同时保留按语言回退。
+    const remoteBody = extractBodyFontFamily(s.remoteCss);
+    if (remoteBody) {
+        const rq = remoteBody.includes(',') ? remoteBody : quoteCss(remoteBody);
+        bodyStack = rq + (bodyStack ? ', ' + bodyStack : '');
+    }
     const codeStack = s.codeFont.trim() || 'monospace';
     const weightRule = s.weight === 'theme'
         ? ''
