@@ -1,0 +1,21 @@
+{
+    "display_name": "字体管理器 Font Manager",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "dependencies": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "yg0108011",
+    "version": "1.0.0",
+    "homePage": "https://github.com/yg0108011/SillyTavern-FontManager",
+    "license": "MIT",
+    "auto_update": true,
+    "minimum_client_version": "1.12.0",
+    "hooks": {
+        "activate": "onActivate",
+        "enable": "onEnable",
+        "disable": "onDisable",
+        "delete": "onDelete"
+    }
+}
