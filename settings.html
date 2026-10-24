@@ -51,19 +51,9 @@
                 <datalist id="fm-datalist-code"></datalist>
             </div>
 
-            <!-- 正文粗细：模式 + 数值滑杆 -->
+            <!-- 字体粗细：数值滑杆 -->
             <div class="fm-row">
-                <label for="fm-weight-mode" class="fm-label">正文粗细</label>
-                <select id="fm-weight-mode" class="fm-select">
-                    <option value="normal">normal（常规 400）</option>
-                    <option value="lighter">lighter（细体）</option>
-                    <option value="bolder">bolder（更粗）</option>
-                    <option value="bold">bold（加粗 700）</option>
-                    <option value="custom">自定义数值（100–900）</option>
-                </select>
-            </div>
-            <div class="fm-row fm-row-sub fm-weight-custom fm-hidden" id="fm-weight-custom">
-                <label for="fm-weight-range" class="fm-label">字重数值</label>
+                <label for="fm-weight-range" class="fm-label">字体粗细</label>
                 <input type="range" id="fm-weight-range" class="fm-range" min="100" max="900" step="50">
                 <span class="fm-weight-value" id="fm-weight-value">400</span>
                 <span class="fm-weight-unit">/900</span>
