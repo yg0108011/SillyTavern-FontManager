@@ -17,7 +17,7 @@ function detectExtensionName() {
     if (!src) src = document.currentScript?.src || '';
     if (!src) {
         const hit = Array.from(document.querySelectorAll('script[type="module"][src]')).find((s) =>
-            /\/scripts\/extensions\/.+\/index\.js(?:\?|#|$)/.test(s.src)
+            /\/scripts\/extensions\/.+?\/index\.js(?:\?|#|$)/.test(s.src)
         );
         src = hit?.src || '';
     }
@@ -272,11 +272,23 @@ function markIcons() {
 }
 
 /**
- * 全站兜底选择器：除「图标元素（fm-no-font）」与「代码区」外，所有文字都强制使用全局字体栈。
- * 用于解决第三方主题自带字体（顶栏、按钮、标签、下拉等）盖过远程 body 字体的问题；
+ * 全站兜底选择器：除「图标元素」与「代码区」外，所有文字都强制使用全局字体栈。
+ * 图标类名直接写进 :not()，CSS 即时匹配（含动态打开的面板），不依赖 JS 标记时机；
+ * markIcons() 另会给非标准类名的图标补打 fm-no-font 标记，双保险。
  * 代码区也排除，让其由 CODE_SELECTORS（applyCode）独立控制，或保持主题默认。
  */
-const GLOBAL_WILDCARD = 'body.fm-active :not(svg):not(.fm-no-font):not(code):not(pre):not(kbd):not(samp):not(.monospace):not(.code)';
+const GLOBAL_WILDCARD = 'body.fm-active :not(svg):not([class*="fa-"]):not([class*="fas "]):not([class*="far "]):not([class*="fab "]):not([class*="material-icons"]):not([class*="svg-inline--fa"]):not([class*="icon-"]):not([class*="iconfont"]):not([class*="glyphicon"]):not(.fm-no-font):not(code):not(pre):not(kbd):not(samp):not(.monospace):not(.code)';
+
+/**
+ * 监听 DOM 变化：酒馆很多面板（扩展管理、角色详情等）是点开后才动态渲染的，
+ * 这些后出现的图标元素需要重新标记，否则会被全站兜底规则改成宋体而显示成方框。
+ */
+let iconObserver = null;
+function startIconObserver() {
+    if (iconObserver || !document.body) return;
+    iconObserver = new MutationObserver(() => markIcons());
+    iconObserver.observe(document.body, { childList: true, subtree: true });
+}
 
 function applyCss() {
     const s = getSettings();
@@ -343,6 +355,7 @@ function applyFonts() {
     }
     document.body.classList.add('fm-active');
     markIcons();
+    startIconObserver();
     injectStyle(STYLE_ID.face, fontFaceCss());
     injectStyle(STYLE_ID.remote, normalizeRemoteCss(s.remoteCss));
     injectStyle(STYLE_ID.apply, applyCss());
