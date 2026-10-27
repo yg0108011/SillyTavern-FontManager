@@ -7,17 +7,13 @@
 const MODULE_NAME = 'font_manager';
 const FORAGE_KEY = 'fm_font_data';
 
-/**
- * 自适应解析当前扩展的真实目录名（兼容 third-party/ 前缀与自定义文件夹名）。
- * 安装目录名可能是 FontManager、仓库名 SillyTavern-FontManager 等，不能写死。
- */
 function detectExtensionName() {
     let src = '';
     try { src = import.meta.url || ''; } catch { src = ''; }
     if (!src) src = document.currentScript?.src || '';
     if (!src) {
         const hit = Array.from(document.querySelectorAll('script[type="module"][src]')).find((s) =>
-            /\/scripts\/extensions\/.+?\/index\.js(?:\?|#|$)/.test(s.src)
+            /\/scripts\/extensions\.+?\/index\.js(?:\?|#|$)/.test(s.src)
         );
         src = hit?.src || '';
     }
@@ -41,7 +37,7 @@ const defaultSettings = Object.freeze({
     codeFont: 'Consolas, "Courier New", monospace',
     applyCode: true,
     weight: '400',
-    fonts: [], // { id, family, weight, style, format, source, fileName }
+    fonts: [],
 });
 
 const SYSTEM_LATIN = ['Times New Roman', 'Georgia', 'Arial', 'Helvetica', 'Verdana', 'Calibri', 'Cambria', 'system-ui'];
@@ -55,20 +51,15 @@ const CODE_PRESETS = [
 ];
 const FONT_EXT = ['ttf', 'otf', 'woff', 'woff2'];
 
-// ============================ 运行时状态 ============================
 let ctx = {};
 let localforageApi = null;
-let cachedFontData = {}; // fontId -> dataURL
-let pendingFiles = [];   // 待导入：{ file, dataUrl, family, weight, style, ext }
+let cachedFontData = {};
+let pendingFiles = [];
 let remoteTimer = null;
 
-// ============================ 工具函数 ============================
 function getSettings() {
     let es = ctx.extensionSettings || ctx.extension_settings;
-    if (!es) {
-        es = {};
-        ctx.extensionSettings = es;
-    }
+    if (!es) { es = {}; ctx.extensionSettings = es; }
     if (!es[MODULE_NAME]) es[MODULE_NAME] = structuredClone(defaultSettings);
     const s = es[MODULE_NAME];
     for (const key of Object.keys(defaultSettings)) {
@@ -102,7 +93,6 @@ function fontFormat(ext) {
     }
 }
 
-/** 生成可放入 CSS 的带引号 family 名；空值返回空字符串 */
 function quoteCss(name) {
     if (!name) return '';
     let v = String(name).trim();
@@ -111,7 +101,6 @@ function quoteCss(name) {
     return `"${v}"`;
 }
 
-/** 清洗用户输入的 family 名（仅用于显示与候选，不破坏原始输入） */
 function cleanFamily(name) {
     return String(name || '').trim();
 }
@@ -122,7 +111,6 @@ function cssWeight(w) {
     return 'normal';
 }
 
-/** 把存储的 weight 值解析为滑杆数值（100–900），非法时回退 400 */
 function weightToNumber(w) {
     const n = parseInt(String(w), 10);
     if (!Number.isNaN(n)) return Math.min(900, Math.max(100, n));
@@ -135,27 +123,18 @@ function escapeHtml(text) {
     }[c]));
 }
 
-// ============================ 字体数据存取 ============================
 async function loadFontData() {
     if (!localforageApi) return {};
-    try {
-        return (await localforageApi.getItem(FORAGE_KEY)) || {};
-    } catch (err) {
-        console.error('[FontManager] 读取本地字体失败：', err);
-        return {};
-    }
+    try { return (await localforageApi.getItem(FORAGE_KEY)) || {}; }
+    catch (err) { console.error('[FontManager] 读取本地字体失败：', err); return {}; }
 }
 
 async function saveFontData() {
     if (!localforageApi) return;
-    try {
-        await localforageApi.setItem(FORAGE_KEY, cachedFontData);
-    } catch (err) {
-        console.error('[FontManager] 保存本地字体失败：', err);
-    }
+    try { await localforageApi.setItem(FORAGE_KEY, cachedFontData); }
+    catch (err) { console.error('[FontManager] 保存本地字体失败：', err); }
 }
 
-// ============================ CSS 构建 ============================
 function buildStack(latin, cjk, other) {
     const stack = [];
     const push = (name) => {
@@ -186,7 +165,6 @@ function fontFaceCss() {
     }).filter(Boolean).join('\n');
 }
 
-/** 远程 CSS：把所有 @import 规则置顶（@import 必须位于样式表最前才会被浏览器接受） */
 function normalizeRemoteCss(raw) {
     if (!raw || !raw.trim()) return '';
     const imports = raw.match(/@import\s+[^;]+;/gi) || [];
@@ -194,12 +172,6 @@ function normalizeRemoteCss(raw) {
     return imports.join('\n') + (rest ? '\n' + rest : '');
 }
 
-/**
- * 从远程 CSS 顶层 body 规则中提取 font-family。
- * 用户在远程样式中写 `body { font-family: "X" }` 的本意是「全站用 X」,
- * 但本插件会对所有界面元素注入 !important 的字体栈覆盖，导致该规则永远被压过。
- * 因此这里把远程 body 字体提取出来，作为全局字体栈的最前项，使远程字体真正生效。
- */
 function extractBodyFontFamily(text) {
     if (!text || !text.trim()) return '';
     const s = String(text);
@@ -208,13 +180,10 @@ function extractBodyFontFamily(text) {
     let blockStart = -1;
     for (let i = 0; i < s.length; i++) {
         const ch = s[i];
-        if (ch === '{') {
-            if (depth === 0) blockStart = i;
-            depth++;
-        } else if (ch === '}') {
+        if (ch === '{') { if (depth === 0) blockStart = i; depth++; }
+        else if (ch === '}') {
             depth--;
             if (depth === 0 && blockStart >= 0) {
-                // 取紧邻本块的顶层选择器（前一个规则边界之后）
                 const selector = s.slice(0, blockStart).split(/[;}\n]/).pop().trim();
                 const block = s.slice(blockStart + 1, i);
                 if (/\bbody\s*$/i.test(selector)) {
@@ -231,7 +200,6 @@ function extractBodyFontFamily(text) {
     return out;
 }
 
-/** 从远程 CSS 文本中解析出 font-family 候选名 */
 function parseRemoteFamilies(text) {
     const out = new Set();
     if (!text) return [...out];
@@ -257,44 +225,29 @@ const CODE_SELECTORS = [
     'body.fm-active .monospace',
 ];
 
-/**
- * 图标元素选择器：匹配常见图标字体形态（FontAwesome 全系列含 fas/far/fab 缩写、
- * 内联 SVG、Material Icons、iconfont / glyphicon 等），由 markIcons() 打上 fm-no-font 标记。
- */
 const ICON_SELECTOR = '[class*="fa-"], [class*="fas "], [class*="far "], [class*="fab "], svg, [class*="material-icons"], [class*="svg-inline--fa"], [class*="icon-"], [class*="iconfont"], [class*="glyphicon"]';
 
-/**
- * 给所有图标元素打上 fm-no-font 标记，让全站兜底规则跳过它们，图标字体保持原样。
- * 相比纯 CSS 类名排除，JS 标记能覆盖 fas/far/fab 缩写、iconfont、glyphicon 等更多形态。
- */
 function markIcons() {
     document.body.querySelectorAll(ICON_SELECTOR).forEach((el) => el.classList.add('fm-no-font'));
 }
 
-/**
- * 全站兜底选择器：除「图标元素」与「代码区」外，所有文字都强制使用全局字体栈。
- * 图标类名直接写进 :not()，CSS 即时匹配（含动态打开的面板），不依赖 JS 标记时机；
- * markIcons() 另会给非标准类名的图标补打 fm-no-font 标记，双保险。
- * 代码区也排除，让其由 CODE_SELECTORS（applyCode）独立控制，或保持主题默认。
- */
 const GLOBAL_WILDCARD = 'body.fm-active :not(svg):not([class*="fa-"]):not([class*="fas "]):not([class*="far "]):not([class*="fab "]):not([class*="material-icons"]):not([class*="svg-inline--fa"]):not([class*="icon-"]):not([class*="iconfont"]):not([class*="glyphicon"]):not(.fm-no-font):not(code):not(pre):not(kbd):not(samp):not(.monospace):not(.code)';
 
-/**
- * 监听 DOM 变化：酒馆很多面板（扩展管理、角色详情等）是点开后才动态渲染的，
- * 这些后出现的图标元素需要重新标记，否则会被全站兜底规则改成宋体而显示成方框。
- */
 let iconObserver = null;
+let iconScanTimer = null;
+function scheduleMarkIcons() {
+    if (iconScanTimer) return;
+    iconScanTimer = setTimeout(() => { iconScanTimer = null; markIcons(); }, 300);
+}
 function startIconObserver() {
     if (iconObserver || !document.body) return;
-    iconObserver = new MutationObserver(() => markIcons());
+    iconObserver = new MutationObserver(() => scheduleMarkIcons());
     iconObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 function applyCss() {
     const s = getSettings();
     let bodyStack = buildStack(s.latinFont, s.cjkFont, s.otherFont);
-    // 远程 CSS 若声明了顶层 body 字体，则把它放在字体栈最前，作为全站主字体；
-    // 这样本插件的 !important 覆盖规则反而会强制全站使用远程字体，同时保留按语言回退。
     const remoteBody = extractBodyFontFamily(s.remoteCss);
     if (remoteBody) {
         const rq = remoteBody.includes(',') ? remoteBody : quoteCss(remoteBody);
@@ -327,7 +280,6 @@ function applyCss() {
     return css;
 }
 
-// ============================ 样式注入 ============================
 function removeStyle(id) {
     document.getElementById(id)?.remove();
 }
@@ -348,11 +300,7 @@ function removeAllStyles() {
 
 function applyFonts() {
     const s = getSettings();
-    if (!s.enabled) {
-        removeAllStyles();
-        refreshPreview();
-        return;
-    }
+    if (!s.enabled) { removeAllStyles(); refreshPreview(); return; }
     document.body.classList.add('fm-active');
     markIcons();
     startIconObserver();
@@ -362,7 +310,6 @@ function applyFonts() {
     refreshPreview();
 }
 
-// ============================ UI 渲染 ============================
 function allLocalFamilies() {
     return getSettings().fonts.map((f) => cleanFamily(f.family));
 }
@@ -373,7 +320,6 @@ function renderFamilyDatalist() {
     const local = allLocalFamilies();
     const latin = [...new Set([...SYSTEM_LATIN, ...local, ...remote])];
     const cjk = [...new Set([...SYSTEM_CJK, ...local, ...remote])];
-
     const latinDl = document.getElementById('fm-datalist-latin');
     const cjkDl = document.getElementById('fm-datalist-cjk');
     const codeDl = document.getElementById('fm-datalist-code');
@@ -446,24 +392,20 @@ function refreshPreview() {
     const cjkEl = document.getElementById('fm-preview-cjk');
     const otherEl = document.getElementById('fm-preview-other');
     const codeEl = document.getElementById('fm-preview-code');
-
     if (latinEl) latinEl.style.fontFamily = `${quoteCss(s.latinFont) || 'Times New Roman'}, Georgia, serif`;
     if (cjkEl) cjkEl.style.fontFamily = s.cjkFont ? `${quoteCss(s.cjkFont)}, sans-serif` : 'system-ui, sans-serif';
     const otherTarget = s.otherFont && s.otherFont !== '__follow__' ? s.otherFont : s.cjkFont;
     if (otherEl) otherEl.style.fontFamily = otherTarget ? `${quoteCss(otherTarget)}, sans-serif` : 'system-ui, sans-serif';
     if (codeEl) codeEl.style.fontFamily = s.codeFont.trim() || 'monospace';
-
     const setLabel = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
     setLabel('fm-preview-latin-label', s.latinFont || 'Times New Roman');
     setLabel('fm-preview-cjk-label', s.cjkFont || '未指定（跟随系统）');
     setLabel('fm-preview-other-label', !otherTarget ? '跟随中文 / 系统' : otherTarget);
     setLabel('fm-preview-code-label', s.codeFont.trim() || 'monospace');
-
     const codeBlock = document.getElementById('fm-preview-code-block');
     if (codeBlock) codeBlock.style.display = s.applyCode ? '' : 'none';
 }
 
-// ============================ 事件处理 ============================
 function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -484,14 +426,7 @@ async function handleFiles(files) {
         }
         try {
             const dataUrl = await readFileAsDataUrl(file);
-            pendingFiles.push({
-                file,
-                dataUrl,
-                family: baseName(file.name),
-                weight: 'normal',
-                style: 'normal',
-                ext,
-            });
+            pendingFiles.push({ file, dataUrl, family: baseName(file.name), weight: 'normal', style: 'normal', ext });
         } catch (err) {
             toastr.error(err.message);
             console.error('[FontManager]', err);
@@ -507,15 +442,7 @@ async function importPending() {
         const family = cleanFamily(p.family) || baseName(p.file.name);
         const id = genId();
         cachedFontData[id] = p.dataUrl;
-        s.fonts.push({
-            id,
-            family,
-            weight: p.weight,
-            style: p.style,
-            format: p.ext,
-            source: 'local',
-            fileName: p.file.name,
-        });
+        s.fonts.push({ id, family, weight: p.weight, style: p.style, format: p.ext, source: 'local', fileName: p.file.name });
         count++;
     }
     pendingFiles = [];
@@ -533,7 +460,6 @@ async function deleteFont(id) {
     s.fonts = s.fonts.filter((f) => f.id !== id);
     delete cachedFontData[id];
     await saveFontData();
-    // 清理引用了已删除字体的下拉值
     const remaining = new Set(s.fonts.map((f) => cleanFamily(f.family)));
     if (s.latinFont && !remaining.has(cleanFamily(s.latinFont))) s.latinFont = defaultSettings.latinFont;
     if (s.cjkFont && !remaining.has(cleanFamily(s.cjkFont))) s.cjkFont = '';
@@ -547,12 +473,7 @@ async function deleteFont(id) {
 
 async function clearAllFonts() {
     const { Popup, POPUP_RESULT, POPUP_TYPE } = ctx;
-    const popup = new Popup(
-        '确认删除全部本地已上传字体？此操作不可恢复。',
-        POPUP_TYPE.CONFIRM,
-        '',
-        { okButton: '删除全部', cancelButton: '取消' }
-    );
+    const popup = new Popup('确认删除全部本地已上传字体？此操作不可恢复。', POPUP_TYPE.CONFIRM, '', { okButton: '删除全部', cancelButton: '取消' });
     const result = await popup.show();
     if (result !== POPUP_RESULT.AFFIRMATIVE) return;
     const s = getSettings();
@@ -598,7 +519,6 @@ function syncControls() {
     $('#fm-remote-css').val(s.remoteCss);
 }
 
-/** 同步字体粗细滑杆到当前设置 */
 function syncWeightSlider() {
     const n = weightToNumber(getSettings().weight);
     $('#fm-weight-range').val(n);
@@ -606,17 +526,10 @@ function syncWeightSlider() {
 }
 
 function bindEvents() {
-    $('#fm-enabled').on('input', function () {
-        getSettings().enabled = this.checked;
-        ctx.saveSettingsDebounced();
-        applyFonts();
-    });
-
+    $('#fm-enabled').on('input', function () { getSettings().enabled = this.checked; ctx.saveSettingsDebounced(); applyFonts(); });
     bindFontInput('#fm-latin-font', 'latinFont');
     bindFontInput('#fm-cjk-font', 'cjkFont');
     bindFontInput('#fm-code-font', 'codeFont');
-
-    // 其他文字：跟随中文 复选框 + 输入框
     $('#fm-other-follow').on('input', function () {
         const s = getSettings();
         s.otherFont = this.checked ? '__follow__' : '';
@@ -631,8 +544,6 @@ function bindEvents() {
         renderFamilyDatalist();
         applyFonts();
     });
-
-    // 字体粗细：数值滑杆
     $('#fm-weight-range').on('input', function () {
         const v = this.value;
         $('#fm-weight-value').text(v);
@@ -640,62 +551,26 @@ function bindEvents() {
         ctx.saveSettingsDebounced();
         applyFonts();
     });
-
-    $('#fm-apply-code').on('input', function () {
-        getSettings().applyCode = this.checked;
-        ctx.saveSettingsDebounced();
-        applyFonts();
-    });
-
-    // 远程 CSS
+    $('#fm-apply-code').on('input', function () { getSettings().applyCode = this.checked; ctx.saveSettingsDebounced(); applyFonts(); });
     $('#fm-remote-css').on('input', function () {
         getSettings().remoteCss = this.value;
         clearTimeout(remoteTimer);
-        remoteTimer = setTimeout(() => {
-            ctx.saveSettingsDebounced();
-            renderFamilyDatalist();
-            syncOtherFollowState();
-            applyFonts();
-        }, 400);
+        remoteTimer = setTimeout(() => { ctx.saveSettingsDebounced(); renderFamilyDatalist(); syncOtherFollowState(); applyFonts(); }, 400);
     });
-    $('#fm-apply-remote').on('click', () => {
-        ctx.saveSettingsDebounced();
-        renderFamilyDatalist();
-        applyFonts();
-        toastr.success('远程字体样式已应用');
-    });
+    $('#fm-apply-remote').on('click', () => { ctx.saveSettingsDebounced(); renderFamilyDatalist(); applyFonts(); toastr.success('远程字体样式已应用'); });
     $('#fm-load-example').on('click', () => {
         const example = '@import url("https://fontsapi.zeoseven.com/285/main/result.css");\nbody {\n    font-family: "Noto Serif CJK";\n    font-weight: normal;\n}';
         $('#fm-remote-css').val(example).trigger('input');
         toastr.info('已填入示例远程 CSS，可按需修改后应用');
     });
-
-    // 本地上传
     $('#fm-upload-btn').on('click', () => $('#fm-font-file').trigger('click'));
-    $('#fm-font-file').on('change', function () {
-        handleFiles(this.files);
-        this.value = '';
-    });
+    $('#fm-font-file').on('change', function () { handleFiles(this.files); this.value = ''; });
     $('#fm-import-pending').on('click', importPending);
-
-    // 字体列表事件委托
-    $('#fm-local-font-list').on('click', '.fm-del-font', function () {
-        deleteFont(this.dataset.id);
-    });
-    $('#fm-pending-list').on('input', '.fm-pending-family', function () {
-        pendingFiles[Number(this.dataset.index)].family = this.value;
-    });
-    $('#fm-pending-list').on('change', '.fm-pending-weight', function () {
-        pendingFiles[Number(this.dataset.index)].weight = this.value;
-    });
-    $('#fm-pending-list').on('change', '.fm-pending-style', function () {
-        pendingFiles[Number(this.dataset.index)].style = this.value;
-    });
-    $('#fm-pending-list').on('click', '.fm-del-pending', function () {
-        pendingFiles.splice(Number(this.dataset.index), 1);
-        renderPendingList();
-    });
-
+    $('#fm-local-font-list').on('click', '.fm-del-font', function () { deleteFont(this.dataset.id); });
+    $('#fm-pending-list').on('input', '.fm-pending-family', function () { pendingFiles[Number(this.dataset.index)].family = this.value; });
+    $('#fm-pending-list').on('change', '.fm-pending-weight', function () { pendingFiles[Number(this.dataset.index)].weight = this.value; });
+    $('#fm-pending-list').on('change', '.fm-pending-style', function () { pendingFiles[Number(this.dataset.index)].style = this.value; });
+    $('#fm-pending-list').on('click', '.fm-del-pending', function () { pendingFiles.splice(Number(this.dataset.index), 1); renderPendingList(); });
     $('#fm-clear-fonts').on('click', clearAllFonts);
     $('#fm-reset-defaults').on('click', resetDisplayDefaults);
 }
@@ -714,36 +589,14 @@ function syncOtherFollowState() {
     $('#fm-other-font').prop('disabled', follow);
 }
 
-// ============================ 生命周期钩子 ============================
-export function onActivate() {
-    initCore();
-    applyFonts();
-}
-
-export function onEnable() {
-    initCore();
-    const s = getSettings();
-    s.enabled = true;
-    ctx.saveSettingsDebounced();
-    applyFonts();
-}
-
-export function onDisable() {
-    initCore();
-    const s = getSettings();
-    s.enabled = false;
-    ctx.saveSettingsDebounced();
-    removeAllStyles();
-}
-
+export function onActivate() { initCore(); applyFonts(); }
+export function onEnable() { initCore(); const s = getSettings(); s.enabled = true; ctx.saveSettingsDebounced(); applyFonts(); }
+export function onDisable() { initCore(); const s = getSettings(); s.enabled = false; ctx.saveSettingsDebounced(); removeAllStyles(); }
 export async function onDelete() {
     initCore();
-    if (localforageApi) {
-        try { await localforageApi.removeItem(FORAGE_KEY); } catch (err) { console.error('[FontManager] 清理失败：', err); }
-    }
+    if (localforageApi) { try { await localforageApi.removeItem(FORAGE_KEY); } catch (err) { console.error('[FontManager] 清理失败：', err); } }
 }
 
-// ============================ 初始化 ============================
 function initCore() {
     ctx = SillyTavern.getContext();
     localforageApi = SillyTavern.libs?.localforage || window.localforage || null;
@@ -752,10 +605,7 @@ function initCore() {
 jQuery(async () => {
     initCore();
     cachedFontData = await loadFontData();
-    const s = getSettings();
-
     let settingsHtml = '';
-    // 优先走酒馆模板渲染；若 404 / 编译失败 / 返回空，回退直接拉取，再失败给兜底面板
     try {
         if (typeof ctx.renderExtensionTemplateAsync === 'function') {
             settingsHtml = await ctx.renderExtensionTemplateAsync(EXT_NAME, 'settings', {});
@@ -765,27 +615,20 @@ jQuery(async () => {
         settingsHtml = '';
     }
     if (!settingsHtml) {
-        try {
-            settingsHtml = await $.get(`scripts/extensions/${EXT_NAME}/settings.html`);
-        } catch (err) {
+        try { settingsHtml = await $.get(`scripts/extensions/${EXT_NAME}/settings.html`); }
+        catch (err) {
             console.error('[FontManager] 设置面板拉取失败：', err);
             settingsHtml = '<div class="fm-manager"><div class="inline-drawer"><div class="inline-drawer-content"><b>字体管理器</b><p>设置面板加载失败：未找到 settings.html，请确认它位于当前扩展目录内。</p></div></div></div>';
         }
     }
-
     const container = document.querySelector('#extensions_settings2') || document.querySelector('#extensions_settings');
-    if (container) {
-        container.insertAdjacentHTML('beforeend', settingsHtml);
-    } else {
-        console.warn('[FontManager] 未找到扩展设置容器，面板未挂载');
-    }
-
+    if (container) container.insertAdjacentHTML('beforeend', settingsHtml);
+    else console.warn('[FontManager] 未找到扩展设置容器，面板未挂载');
     bindEvents();
     syncControls();
     renderFamilyDatalist();
     renderFontList();
     renderPendingList();
     applyFonts();
-
     console.log('[FontManager] 扩展已加载');
 });
